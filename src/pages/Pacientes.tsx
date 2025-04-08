@@ -1,322 +1,491 @@
-import React, { useState, useEffect } from "react";
-      import { AppShell } from "@/components/layout/app-shell";
-      import { PacienteCard, PacienteData } from "@/components/pacientes/paciente-card";
-      import { Button } from "@/components/ui/button";
-      import { Input } from "@/components/ui/input";
-      import { Plus, Search, GripVertical } from "lucide-react"; // Added GripVertical
-      import { useToast } from "@/hooks/use-toast";
-      import { ScrollArea } from "@/components/ui/scroll-area";
-      import { useApiConfig, ApiConfig } from "@/contexts/ApiConfigContext";
-      import {
-        DndContext,
-        closestCenter,
-        PointerSensor,
-        KeyboardSensor,
-        useSensor,
-        useSensors,
-        DragEndEvent,
-        UniqueIdentifier
-      } from '@dnd-kit/core';
-      import {
-        SortableContext,
-        sortableKeyboardCoordinates,
-        verticalListSortingStrategy, // Strategy for vertical lists within columns
-        useSortable
-      } from '@dnd-kit/sortable';
-      import { CSS } from '@dnd-kit/utilities';
-      import { Badge } from "@/components/ui/badge"; // Import Badge
+import { useState, useEffect, useCallback } from "react";
+import { AppShell } from "@/components/layout/app-shell";
+import { PacienteData, PacienteDataExtended, ProcedimentoData } from "@/components/pacientes/paciente-card";
+import { PipelineColumn } from "@/components/pacientes/PipelineColumn";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { Plus, Search, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useApiConfig } from "@/contexts/ApiConfigContext";
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent,
+} from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { PacienteDetailModal } from "@/components/pacientes/paciente-detail-modal";
+import { NewPacienteModal } from "@/components/pacientes/NewPacienteModal";
+import { initialProcedimentos, ProcedimentoConfig } from "@/components/configuracoes/ProcedimentosSettings";
+import { supabase } from "@/integrations/supabase/client";
 
-      // Pipeline stages with IDs matching droppable containers
-      const pipelineStages = [
-        { id: "lead", label: "Lead Recebido" },
-        { id: "tentativa", label: "Tentativa de Contato" },
-        { id: "contato", label: "Contato Realizado" },
-        { id: "agendamento_consulta", label: "Agendamento de Consulta" },
-        { id: "consulta_realizada", label: "Consulta Realizada" },
-        { id: "agendamento_exames", label: "Agendamento de Exames" },
-        { id: "exames_realizados", label: "Exames Realizados" },
-        { id: "agendamento_cirurgia_smc", label: "Agendamento Cirurgia (SMC)" },
-        { id: "cirurgia_1_olho", label: "1º Olho - Cirurgia Realizada" },
-        { id: "agendamento_cirurgia_2_olho", label: "Agendamento Cirurgia 2º Olho" },
-        { id: "cirurgia_2_olho", label: "2º Olho - Cirurgia Realizada" },
-        { id: "resgate", label: "Resgate" },
-      ];
+const pipelineStages = [ 
+  { id: "lead", label: "Lead Recebido" },
+  { id: "tentativa", label: "Tentativa de Contato" },
+  { id: "contato", label: "Contato Realizado" },
+  { id: "agendamento_consulta", label: "Agendamento de Consulta" },
+  { id: "consulta_realizada", label: "Consulta Realizada" },
+  { id: "agendamento_exames", label: "Agendamento de Exames" },
+  { id: "exames_realizados", label: "Exames Realizados" },
+  { id: "agendamento_cirurgia_smc", label: "Agendamento Cirurgia (SMC)" },
+  { id: "cirurgia_1_olho", label: "1º Olho - Cirurgia Realizada" },
+  { id: "agendamento_cirurgia_2_olho", label: "Agendamento Cirurgia 2º Olho" },
+  { id: "cirurgia_2_olho", label: "2º Olho - Cirurgia Realizada" },
+  { id: "resgate", label: "Resgate" },
+];
 
-      // --- Sample Data Generation (Keep as before) ---
-      const hospitalsData: Record<string, string[]> = { "HODF": ["Dr. João Silva", "Dra. Ana Costa"], "HO Londrina": ["Dr. Carlos Souza", "Dra. Beatriz Lima"], "HO Maringa": ["Dra. Mariana Ferreira", "Dr. Gustavo Pereira"], "HOA": ["Dr. Lucas Gomes", "Dra. Julia Almeida"] };
-      const hospitalNames = Object.keys(hospitalsData);
-      const generateCPF = (): string => { const rnd = (n: number) => Math.round(Math.random() * n); const n = Array(9).fill(0).map(() => rnd(9)); let d1 = n.map((v, i) => v * (10 - i)).reduce((acc, v) => acc + v, 0) % 11; d1 = d1 < 2 ? 0 : 11 - d1; n.push(d1); let d2 = n.map((v, i) => v * (11 - i)).reduce((acc, v) => acc + v, 0) % 11; d2 = d2 < 2 ? 0 : 11 - d2; n.push(d2); return `${n.slice(0, 3).join('')}.${n.slice(3, 6).join('')}.${n.slice(6, 9).join('')}-${n.slice(9).join('')}`; };
-      const generateBrazilianName = (): string => { const firstNames = ["Ana", "Carlos", "Fernanda", "Lucas", "Mariana", "Pedro", "Sofia", "Thiago"]; const lastNames = ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira"]; return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`; };
-      const specificProcedures = [ "Cirurgia de Catarata", "Cirurgia Refrativa", "Consulta Oftalmológica", "Exame OCT", "Exame Topografia", "Tratamento Glaucoma" ];
-      const generatePacientes = (count = 60): PacienteData[] => { const pacientes: PacienteData[] = []; for (let i = 0; i < count; i++) { const stageIndex = i % pipelineStages.length; const stageId = pipelineStages[stageIndex].id; const currentHospital = hospitalNames[i % hospitalNames.length]; const doctorsForHospital = hospitalsData[currentHospital]; const currentDoctor = doctorsForHospital[Math.floor(Math.random() * doctorsForHospital.length)]; const birthYear = 1950 + Math.floor(Math.random() * 50); const birthMonth = Math.floor(Math.random() * 12); const birthDay = 1 + Math.floor(Math.random() * 28); pacientes.push({ id: `pac-${i + 1}`, nome: generateBrazilianName(), hospital: currentHospital, medico: currentDoctor, valor: 1000 + Math.floor(Math.random() * 9000), convenio: ["Acesso Oftalmologia", "Bradesco", "Unimed", "SulAmérica", "Particular"][i % 5], telefone: `55119${String(Math.random()).substring(2, 10)}`, dataNascimento: new Date(birthYear, birthMonth, birthDay), cpf: generateCPF(), telefone2: Math.random() > 0.7 ? `55119${String(Math.random()).substring(2, 10)}` : undefined, email: Math.random() > 0.4 ? `paciente.teste${i + 1}@email.com` : undefined, uf: ["SP", "RJ", "MG", "PR"][i % 4], cidade: ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba"][i % 4], bairro: ["Centro", "Jardins", "Copacabana", "Savassi"][i % 4], origem: ["Publicidade Digital", "Evento", "Indicação"][i % 3], marketingData: {}, procedimentos: Array(1 + Math.floor(Math.random() * 2)).fill(null).map((_, j) => { const procedureName = specificProcedures[Math.floor(Math.random() * specificProcedures.length)]; const procedureType = procedureName.includes("Consulta") ? "Consulta" : procedureName.includes("Exame") ? "Exame" : "Cirurgia"; const procedureStatus = ["pendente", "ganho", "perdido"][Math.floor(Math.random() * 3)]; const procYear = 2023 + Math.floor(Math.random() * 2); const procMonth = Math.floor(Math.random() * 12); const procDay = 1 + Math.floor(Math.random() * 28); return { id: `proc-${i + 1}-${j + 1}`, tipo: procedureType, hospital: currentHospital, medico: currentDoctor, procedimento: procedureName, valor: 300 + Math.floor(Math.random() * 4700), data: new Date(procYear, procMonth, procDay), observacao: Math.random() > 0.8 ? `Obs ${j + 1}` : "", convenio: ["Acesso Oftalmologia", "Bradesco", "Unimed"][i % 3], status: procedureStatus, } }), historico: Array(1 + Math.floor(Math.random() * 3)).fill(null).map((_, j) => { const histYear = 2023 + Math.floor(Math.random() * 2); const histMonth = Math.floor(Math.random() * 12); const histDay = 1 + Math.floor(Math.random() * 28); const histHour = Math.floor(Math.random() * 24); const histMin = Math.floor(Math.random() * 60); return { id: `hist-${i + 1}-${j + 1}`, data: new Date(histYear, histMonth, histDay, histHour, histMin), tipo: ["Ligação", "Status", "Criação"][j % 3], descricao: `Histórico ${j + 1}.`, usuario: ["Admin", "Consultor"][j % 2], }; }).sort((a, b) => b.data.getTime() - a.data.getTime()), status: pipelineStages[stageIndex].label // Use label for initial status matching
-          }); } return pacientes; };
-      const initialPacientesData = generatePacientes(60);
-      // --- End Sample Data Generation ---
+const stagesWithTotals = [
+  "Agendamento de Consulta", "Consulta Realizada", "Agendamento de Exames", 
+  "Exames Realizados", "Agendamento Cirurgia (SMC)", "1º Olho - Cirurgia Realizada", 
+  "Agendamento Cirurgia 2º Olho", "2º Olho - Cirurgia Realizada"
+];
 
-      // --- Draggable Patient Card Component ---
-      interface DraggablePacienteCardProps {
-        paciente: PacienteData;
-        apiConfig: ApiConfig | null;
-      }
+const hospitalsData: Record<string, string[]> = {
+  "HODF": ["Dr. João Silva", "Dra. Ana Costa"],
+  "HO Londrina": ["Dr. Carlos Souza", "Dra. Beatriz Lima"],
+  "HO Maringa": ["Dra. Mariana Ferreira", "Dr. Gustavo Pereira"],
+  "HOA": ["Dr. Lucas Gomes", "Dra. Julia Almeida"]
+};
 
-      const DraggablePacienteCard: React.FC<DraggablePacienteCardProps> = ({ paciente, apiConfig }) => {
-        const {
-          attributes,
-          listeners,
-          setNodeRef,
-          transform,
-          transition,
-          isDragging, // Use isDragging for styling
-        } = useSortable({ id: paciente.id }); // Use paciente.id as the sortable ID
+const hospitalNames = Object.keys(hospitalsData);
+const generateCPF = (): string => { const rnd = (n: number) => Math.round(Math.random() * n); const n = Array(9).fill(0).map(() => rnd(9)); let d1 = n.map((v, i) => v * (10 - i)).reduce((acc, v) => acc + v, 0) % 11; d1 = d1 < 2 ? 0 : 11 - d1; n.push(d1); let d2 = n.map((v, i) => v * (11 - i)).reduce((acc, v) => acc + v, 0) % 11; d2 = d2 < 2 ? 0 : 11 - d2; n.push(d2); return `${n.slice(0, 3).join('')}.${n.slice(3, 6).join('')}.${n.slice(6, 9).join('')}-${n.slice(9).join('')}`; };
+const generateBrazilianName = (): string => { const firstNames = ["Ana", "Beatriz", "Carlos", "Daniela", "Eduardo", "Fernanda", "Gustavo", "Helena", "Igor", "Juliana", "Lucas", "Mariana", "Nicolas", "Olivia", "Pedro", "Rafaela", "Sofia", "Thiago", "Valentina"]; const lastNames = ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Lima", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho"]; return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`; };
 
-        const style = {
-          transform: CSS.Transform.toString(transform),
-          transition,
-          opacity: isDragging ? 0.5 : 1, // Make card semi-transparent while dragging
-          zIndex: isDragging ? 10 : undefined, // Bring card to front while dragging
-          // cursor: isDragging ? 'grabbing' : 'grab', // Cursor is handled by the handle now
-        };
+const specificProcedures = [
+  "Cirurgia de Catarata", "Cirurgia Refrativa (Miopia)", "Cirurgia Refrativa (Astigmatismo)",
+  "Cirurgia de Pterígio", "Consulta Oftalmológica Geral", "Exame OCT", "Exame Topografia Corneana",
+  "Tratamento Glaucoma", "Injeção Intravítrea", "Crosslinking"
+];
 
-        return (
-          <div ref={setNodeRef} style={style} {...attributes} >
-            {/* Pass listeners ONLY to the handle element inside PacienteCard */}
-            <PacienteCard
-              paciente={paciente}
-              apiConfig={apiConfig}
-              listeners={listeners} // Pass listeners down
-            />
-          </div>
-        );
+const gestores = ["Alice Rodrigues", "Bruno Carvalho", "Camila Lima"];
+const consultores = ["Diego Martins", "Elisa Gomes", "Fábio Costa"];
+const mockLoggedInUser = { id: "user-123", nome: "Consultor Logado Exemplo" };
+
+const generatePacientes = (count = 60): PacienteDataExtended[] => {
+  const pacientes: PacienteDataExtended[] = [];
+  const testPhoneNumber = "5561981115413";
+  for (let i = 0; i < count; i++) {
+    const stageIndex = i % pipelineStages.length;
+    const stageName = pipelineStages[stageIndex].label;
+    const currentHospital = hospitalNames[i % hospitalNames.length];
+    const doctorsForHospital = hospitalsData[currentHospital];
+    const currentDoctor = doctorsForHospital[Math.floor(Math.random() * doctorsForHospital.length)];
+    const birthYear = 1950 + Math.floor(Math.random() * 50);
+    const birthMonth = Math.floor(Math.random() * 12);
+    const birthDay = 1 + Math.floor(Math.random() * 28);
+    const currentPhoneNumber = i === 0 ? testPhoneNumber : `55119${String(Math.random()).substring(2, 10)}`;
+    const origem = ["Publicidade Digital", "Evento", "Publicidade Tradicional", "Indicação"][i % 4] as PacienteData['origem'];
+    let marketingData: any = {};
+    switch (origem) {
+      case "Publicidade Digital":
+        marketingData = { fonte: ["Facebook", "Google Ads", "Instagram"][i % 3], campanha: `Campanha ${['Verão', 'Inverno', 'Institucional'][i % 3]} 2024`, conjunto: `Conjunto ${i % 5 + 1}`, tipoCriativo: ["Imagem", "Vídeo", "Carrossel"][i % 3], tituloCriativo: `Anúncio ${i % 10 + 1}`, palavraChave: Math.random() > 0.5 ? `oftalmologista ${['perto', 'consulta', 'cirurgia'][i % 3]}` : undefined, };
+        break;
+      case "Publicidade Tradicional":
+        marketingData = { fonte: ["Revista Veja", "TV Globo", "Rádio CBN"][i % 3], campanha: `Campanha Tradicional ${i % 2 + 1}`, };
+        break;
+      case "Indicação":
+        marketingData = { quemIndicou: generateBrazilianName(), dataIndicacao: new Date(2024, i % 12, (i % 28) + 1), telefoneIndicacao: `55119${String(Math.random()).substring(2, 10)}`, };
+        break;
+      case "Evento":
+        marketingData = { nomeEvento: `Feira de Saúde ${2023 + (i % 2)}`, dataEvento: new Date(2023 + (i % 2), 5 + (i % 6), (i % 28) + 1), descricaoEvento: `Evento realizado no ${['Shopping Center', 'Parque da Cidade'][i % 2]}.`, };
+        break;
+    }
+    
+    const procedimentos: ProcedimentoData[] = Array(1 + Math.floor(Math.random() * 3)).fill(null).map((_, j) => {
+      const procHospital = currentHospital;
+      const procDoctor = doctorsForHospital[Math.floor(Math.random() * doctorsForHospital.length)];
+      const procedureName = specificProcedures[Math.floor(Math.random() * specificProcedures.length)];
+      const procedureType = procedureName.includes("Consulta") ? "Consulta" : procedureName.includes("Exame") ? "Exame" : "Cirurgia";
+      const procedureStatus = ["pendente", "agendado", "ganho", "perdido"][Math.floor(Math.random() * 4)] as "pendente" | "agendado" | "ganho" | "perdido";
+      const procYear = 2023 + Math.floor(Math.random() * 2);
+      const procMonth = Math.floor(Math.random() * 12);
+      const procDay = 1 + Math.floor(Math.random() * 28);
+      
+      return {
+        id: `proc-${i + 1}-${j + 1}`,
+        tipo: procedureType,
+        hospital: procHospital,
+        medico: procDoctor,
+        procedimento: procedureName,
+        valor: 300 + Math.floor(Math.random() * 4700),
+        data: new Date(procYear, procMonth, procDay),
+        observacao: Math.random() > 0.8 ? `Observação ${j + 1}` : "",
+        convenio: ["Acesso Oftalmologia", "Bradesco", "Unimed", "SulAmérica", "Particular"][i % 5],
+        status: procedureStatus,
       };
-      // --- End Draggable Patient Card Component ---
+    });
+    
+    pacientes.push({
+      id: `pac-${i + 1}`,
+      nome: i === 0 ? "Paciente Teste" : generateBrazilianName(),
+      hospital: currentHospital,
+      medico: currentDoctor,
+      valor: 1000 + Math.floor(Math.random() * 9000),
+      convenio: ["Acesso Oftalmologia", "Bradesco", "Unimed", "SulAmérica", "Particular"][i % 5],
+      telefone: currentPhoneNumber,
+      dataNascimento: new Date(birthYear, birthMonth, birthDay),
+      cpf: generateCPF(),
+      telefone2: Math.random() > 0.7 ? `55119${String(Math.random()).substring(2, 10)}` : undefined,
+      email: Math.random() > 0.4 ? `paciente.teste${i + 1}@email.com` : undefined,
+      uf: ["SP", "RJ", "MG", "PR", "SC"][i % 5],
+      cidade: ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Florianópolis"][i % 5],
+      bairro: ["Centro", "Jardins", "Copacabana", "Savassi", "Batel"][i % 5],
+      origem: origem,
+      marketingData: marketingData,
+      gestorResponsavel: gestores[i % gestores.length],
+      consultorResponsavel: consultores[i % consultores.length],
+      quemCriou: consultores[i % consultores.length],
+      procedimentos: procedimentos,
+      historico: Array(1 + Math.floor(Math.random() * 5)).fill(null).map((_, j) => {
+        const histYear = 2023 + Math.floor(Math.random() * 2);
+        const histMonth = Math.floor(Math.random() * 12);
+        const histDay = 1 + Math.floor(Math.random() * 28);
+        const histHour = Math.floor(Math.random() * 24);
+        const histMin = Math.floor(Math.random() * 60);
+        return {
+          id: `hist-${i + 1}-${j + 1}`,
+          data: new Date(histYear, histMonth, histDay, histHour, histMin),
+          tipo: ["Ligação", "Status", "Procedimento", "Criação", "Acompanhamento", "Alteração"][j % 6],
+          descricao: `Registro ${j + 1}.`,
+          usuario: ["Admin", "Consultor 1", "Sistema"][j % 3],
+        };
+      }).sort((a, b) => b.data.getTime() - a.data.getTime()),
+      status: stageName,
+    });
+  }
+  return pacientes;
+};
 
+const Pacientes = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
+  const { apiConfig } = useApiConfig();
+  const [pacientes, setPacientes] = useState<PacienteDataExtended[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [selectedPaciente, setSelectedPaciente] = useState<PacienteDataExtended | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [configuredProcedures] = useState<ProcedimentoConfig[]>(initialProcedimentos);
+  const [hospitais, setHospitais] = useState<any[]>([]);
+  const [medicos, setMedicos] = useState<any[]>([]);
 
-      const Pacientes = () => {
-        const [searchTerm, setSearchTerm] = useState("");
-        const { toast } = useToast();
-        const { apiConfig } = useApiConfig();
-        const [pacientesList, setPacientesList] = useState<PacienteData[]>(initialPacientesData); // Manage patients in state
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
-        useEffect(() => {
-            console.log("[Pacientes Page] Received apiConfig from context:", apiConfig);
-            if (!apiConfig?.apiUrl || !apiConfig?.apiKey || !apiConfig?.apiInstance) {
-                console.warn("[Pacientes Page] API Config from context seems incomplete.");
-            }
-        }, [apiConfig]);
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          console.log("Usuário não autenticado, usando dados mockados");
+          setPacientes(generatePacientes(10));
+          setIsLoading(false);
+          return;
+        }
 
-        const sensors = useSensors(
-          useSensor(PointerSensor, {
-              // Require the mouse to move by 10 pixels before starting a drag
-              // Helps prevent unwanted drags when clicking on elements inside the card
-              activationConstraint: {
-                  distance: 10,
-              },
-          }),
-          useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-          })
-        );
-
-        const handleAddNewPaciente = () => {
+        const { data: hospitaisData, error: hospitaisError } = await supabase
+          .from('hospitais')
+          .select('*');
+        
+        if (hospitaisError) {
+          console.error("Erro ao carregar hospitais:", hospitaisError);
           toast({
-            title: "Funcionalidade em desenvolvimento",
-            description: "O cadastro de novos pacientes estará disponível em breve.",
+            variant: "destructive",
+            title: "Erro ao carregar hospitais",
+            description: hospitaisError.message
           });
-        };
+        } else {
+          setHospitais(hospitaisData || []);
+        }
 
-        // Filter patients based on search term AND stage
-        const getFilteredPacientesByStage = (stageLabel: string): PacienteData[] => {
-          const lowerSearchTerm = searchTerm.toLowerCase();
-          return pacientesList.filter(p =>
-            p.status === stageLabel &&
-            (!searchTerm ||
-              p.nome.toLowerCase().includes(lowerSearchTerm) ||
-              p.telefone?.includes(searchTerm) ||
-              p.cpf?.includes(searchTerm)
-            )
-          );
-        };
+        const { data: medicosData, error: medicosError } = await supabase
+          .from('medicos')
+          .select('*');
+        
+        if (medicosError) {
+          console.error("Erro ao carregar médicos:", medicosError);
+        } else {
+          setMedicos(medicosData || []);
+        }
 
-        // --- Drag End Handler ---
-        const handleDragEnd = (event: DragEndEvent) => {
-          const { active, over } = event;
+        const { data: pacientesData, error: pacientesError } = await supabase
+          .from('pacientes')
+          .select(`
+            id, nome, hospital_id, medico_id, telefone, data_nascimento, 
+            cpf, telefone2, email, uf, cidade, bairro, origem, marketing_info,
+            consultor_responsavel_id, gestor_responsavel_id, quem_criou_id, status
+          `);
+        
+        if (pacientesError) {
+          console.error("Erro ao carregar pacientes:", pacientesError);
+          toast({
+            variant: "destructive",
+            title: "Erro ao carregar pacientes",
+            description: pacientesError.message
+          });
+          setPacientes(generatePacientes(10));
+        } else {
+          const pacientesMapeados = (pacientesData || []).map(p => {
+            const hospital = hospitaisData?.find(h => h.id === p.hospital_id)?.nome || "Hospital Desconhecido";
+            const medico = medicosData?.find(m => m.id === p.medico_id)?.nome || "";
 
-          // Ensure 'over' is not null and we are dropping onto a SortableContext container
-          if (over && active.id !== over.id) {
-            const activePacienteId = active.id as string;
-            // over.id should be the ID of the SortableContext (stage.id)
-            const targetStageId = over.id as string;
+            return {
+              id: p.id.toString(),
+              nome: p.nome,
+              hospital: hospital,
+              medico: medico,
+              convenio: "",
+              telefone: p.telefone,
+              dataNascimento: p.data_nascimento ? new Date(p.data_nascimento) : null,
+              cpf: p.cpf || "",
+              telefone2: p.telefone2,
+              email: p.email,
+              uf: p.uf,
+              cidade: p.cidade,
+              bairro: p.bairro,
+              origem: p.origem,
+              marketingData: p.marketing_info || {},
+              gestorResponsavel: p.gestor_responsavel_id || "",
+              consultorResponsavel: p.consultor_responsavel_id || "",
+              status: p.status,
+              procedimentos: [],
+              historico: [],
+              valor: 0,
+              notas: []
+            } as PacienteDataExtended;
+          });
 
-            const targetStage = pipelineStages.find(stage => stage.id === targetStageId);
+          setPacientes(pacientesMapeados);
+        }
+      } catch (error: any) {
+        console.error("Erro ao carregar dados:", error);
+        toast({
+          variant: "destructive",
+          title: "Erro ao carregar dados",
+          description: `Ocorreu um erro: ${error.message}`
+        });
+        setPacientes(generatePacientes(10));
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-            if (!targetStage) {
-              console.error("Target stage not found for ID:", targetStageId);
-              // Check if dropped over a card instead of the column
-              // Find the stage of the card dropped over
-              const overPaciente = pacientesList.find(p => p.id === over.id);
-              if (overPaciente) {
-                  const overStage = pipelineStages.find(s => s.label === overPaciente.status);
-                  if (overStage) {
-                      console.log(`Dropped over card ${over.id} in stage ${overStage.label}`);
-                      // Re-run logic with the correct stage ID
-                      handleDragEnd({ ...event, over: { ...over, id: overStage.id } });
-                  } else {
-                      console.error("Could not determine stage for card:", over.id);
-                  }
-              } else {
-                  console.error("Could not find target stage or card:", targetStageId, over.id);
-              }
-              return; // Exit if target stage is invalid
-            }
+    loadData();
+  }, [toast]);
 
-            const newStatus = targetStage.label;
+  const handleOpenDetailModal = (paciente: PacienteDataExtended) => {
+    setSelectedPaciente(paciente);
+    setIsDetailModalOpen(true);
+  };
 
-            // Check if the patient is actually changing stage
-            const currentPaciente = pacientesList.find(p => p.id === activePacienteId);
-            if (currentPaciente && currentPaciente.status === newStatus) {
-                console.log(`Patient ${activePacienteId} dropped in the same stage (${newStatus}). No status change.`);
-                return; // No need to update if status is the same
-            }
+  const handleSavePaciente = async (updatedPaciente: PacienteDataExtended): Promise<void> => {
+    console.log("Saving edited:", updatedPaciente);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    setPacientes(prev => prev.map(p => 
+      p.id === updatedPaciente.id ? updatedPaciente : p
+    ));
+    
+    console.log("Local state updated.");
+  };
 
+  const handleAddNewPacienteSave = async (
+    newPacienteData: Omit<PacienteDataExtended, 'id' | 'status'>,
+    closeModal?: () => void
+  ): Promise<void> => {
+    console.log("Saving new:", newPacienteData);
+    
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-            setPacientesList((prevPacientes) => {
-              const updatedPacientes = prevPacientes.map(paciente => {
-                if (paciente.id === activePacienteId) {
-                  console.log(`Moving patient ${activePacienteId} to stage ${newStatus}`);
-                  return { ...paciente, status: newStatus };
-                }
-                return paciente;
-              });
-              return updatedPacientes;
-            });
+    const createdPaciente: PacienteDataExtended = {
+      ...newPacienteData,
+      id: `pac-${Date.now()}`,
+      status: pipelineStages[0].label,
+      consultorResponsavel: mockLoggedInUser.nome,
+      historico: [{
+        id: `hist-${Date.now()}`,
+        data: new Date(),
+        tipo: "Criação",
+        descricao: `Lead criado por ${mockLoggedInUser.nome}.`,
+        usuario: mockLoggedInUser.nome
+      }, ...(newPacienteData.historico || [])]
+    } as PacienteDataExtended;
 
-            toast({
-                title: "Paciente Movido",
-                description: `Paciente movido para a etapa "${newStatus}". (Alteração local)`,
-            });
-            // **TODO: Add API call here to persist the status change in the backend**
-          } else {
-              console.log("Drag ended but not over a valid target or same target:", active, over);
-          }
-        };
-        // --- End Drag End Handler ---
+    setPacientes(prevPacientes => [createdPaciente, ...prevPacientes]);
+    
+    console.log("New paciente added:", createdPaciente);
+    toast({
+      title: "Paciente Criado",
+      description: `"${createdPaciente.nome}" foi adicionado ao pipeline.`
+    });
+    
+    closeModal?.();
+  };
 
-        // --- Sum Calculation ---
-        const calculateStageSum = (stageLabel: string): { consulta: number; exame: number; cirurgia: number } => {
-            const stagePacientes = pacientesList.filter(p => p.status === stageLabel);
-            let sums = { consulta: 0, exame: 0, cirurgia: 0 };
+  const filterPacientes = useCallback((pacientesToFilter: PacienteDataExtended[]) => {
+    if (!searchTerm) return pacientesToFilter;
+    const lowerSearchTerm = searchTerm.toLowerCase().trim();
+    if (!lowerSearchTerm) return pacientesToFilter;
+    
+    return pacientesToFilter.filter(p => 
+      p.nome.toLowerCase().includes(lowerSearchTerm) || 
+      p.telefone?.replace(/\D/g, '').includes(lowerSearchTerm.replace(/\D/g, '')) || 
+      p.cpf?.replace(/\D/g, '').includes(lowerSearchTerm.replace(/\D/g, ''))
+    );
+  }, [searchTerm]);
 
-            stagePacientes.forEach(paciente => {
-                // Sum based on the *first* procedure's type and value
-                if (paciente.procedimentos && paciente.procedimentos.length > 0) {
-                    const firstProc = paciente.procedimentos[0];
-                    const value = firstProc.valor || 0;
-                    if (firstProc.tipo === "Consulta") {
-                        sums.consulta += value;
-                    } else if (firstProc.tipo === "Exame") {
-                        sums.exame += value;
-                    } else if (firstProc.tipo === "Cirurgia") {
-                        sums.cirurgia += value;
-                    }
-                }
-            });
-            return sums;
-        };
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const pacienteId = active.id as string;
+      const targetStageId = over.id as string;
+      const targetStage = pipelineStages.find(stage => stage.id === targetStageId);
+      
+      if (!targetStage) return;
+      const newStatusLabel = targetStage.label;
+      const originalPaciente = pacientes.find(p => p.id === pacienteId);
+      const originalStatus = originalPaciente?.status;
+      
+      if (!originalPaciente) return;
 
-        const shouldDisplaySum = (stageLabel: string): boolean => {
-            const startIndex = pipelineStages.findIndex(s => s.label === "Agendamento de Consulta");
-            const currentIndex = pipelineStages.findIndex(s => s.label === stageLabel);
-            return startIndex !== -1 && currentIndex !== -1 && currentIndex >= startIndex;
-        };
-        // --- End Sum Calculation ---
+      setPacientes(prev => prev.map(p => 
+        p.id === pacienteId ? { ...p, status: newStatusLabel } : p
+      ));
+      
+      setIsUpdating(pacienteId);
+      
+      console.log(`Movendo ${pacienteId} para ${newStatusLabel} (Otimista)`);
+      
+      try {
+        console.log(`Simulando API PATCH /api/pacientes/${pacienteId}/status com status=${newStatusLabel}`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        toast({
+          title: "Paciente Movido",
+          description: `Status atualizado para "${newStatusLabel}".`
+        });
+      } catch (error: any) {
+        console.error(`Erro DND ${pacienteId}:`, error);
+        
+        toast({
+          variant: "destructive",
+          title: "Erro ao Mover",
+          description: `Não foi possível atualizar o status. ${error.message || ''}`
+        });
+        
+        setPacientes(prev => prev.map(p => 
+          p.id === pacienteId ? { ...originalPaciente, status: originalStatus || p.status } : p
+        ));
+      } finally {
+        setIsUpdating(null);
+      }
+    }
+  };
 
-        return (
-          <AppShell>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <div className="h-full flex flex-col">
-                {/* Header */}
-                <div className="p-4 border-b sticky top-0 bg-background z-20">
-                  <div className="container mx-auto">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <h1 className="text-2xl font-bold">Pacientes</h1>
-                      <div className="flex items-center w-full sm:w-auto gap-2">
-                        <div className="relative flex-1 sm:flex-none sm:w-64">
-                          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Buscar paciente..."
-                            className="pl-8 w-full"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                          />
-                        </div>
-                        <Button onClick={handleAddNewPaciente}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Novo
-                        </Button>
-                      </div>
-                    </div>
+  const calculateStageTotals = (stageLabel: string) => {
+    const pacientesInStage = pacientes.filter(p => p.status === stageLabel);
+    let totalConsulta = 0, totalExame = 0, totalCirurgia = 0;
+    
+    pacientesInStage.forEach(pac => {
+      pac.procedimentos?.forEach(proc => {
+        if (proc.status === 'pendente' || proc.status === 'ganho') {
+          if (proc.tipo === 'Consulta') totalConsulta += proc.valor || 0;
+          else if (proc.tipo === 'Exame') totalExame += proc.valor || 0;
+          else if (proc.tipo === 'Cirurgia') totalCirurgia += proc.valor || 0;
+        }
+      });
+    });
+    
+    return { totalConsulta, totalExame, totalCirurgia };
+  };
+
+  return (
+    <AppShell>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className="h-full flex flex-col">
+          <div className="p-4 border-b sticky top-0 bg-background z-20">
+            <div className="container mx-auto">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold">Pipeline de Pacientes</h1>
+                <div className="flex items-center w-full sm:w-auto gap-2">
+                  <div className="relative flex-1 sm:flex-none sm:w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      type="search" 
+                      placeholder="Buscar por nome, tel ou CPF..." 
+                      className="pl-8 w-full"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                   </div>
-                </div>
 
-                {/* Kanban Board */}
-                <div className="flex-1 overflow-x-auto overflow-y-hidden">
-                  <div className="kanban-container flex flex-nowrap h-full">
-                    {pipelineStages.map((stage) => {
-                      const stagePacientes = getFilteredPacientesByStage(stage.label);
-                      const stageSums = shouldDisplaySum(stage.label) ? calculateStageSum(stage.label) : null;
-                      const totalStageSum = stageSums ? stageSums.consulta + stageSums.exame + stageSums.cirurgia : 0;
-
-                      return (
-                        // Each column is a SortableContext providing the droppable area
-                        // Use stage.id as the ID for the droppable container
-                        <SortableContext key={stage.id} id={stage.id} items={stagePacientes.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                          <div id={stage.id} className="pipeline-column flex-shrink-0 w-[300px]">
-                            <div className="font-medium text-sm mb-1 px-1 sticky top-0 bg-muted/80 backdrop-blur-sm z-10 pt-2 pb-1">
-                              {stage.label}
-                              <span className="text-xs text-muted-foreground ml-2">
-                                ({stagePacientes.length})
-                              </span>
-                              {/* Display Sums */}
-                              {stageSums && (
-                                <div className="mt-1 text-xs space-y-0.5">
-                                   <Badge variant="secondary" className="w-full justify-between font-normal">
-                                      <span>Total:</span>
-                                      <span>R$ {totalStageSum.toLocaleString('pt-BR')}</span>
-                                   </Badge>
-                                   {stageSums.consulta > 0 && <Badge variant="outline" className="w-full justify-between font-normal bg-blue-50 border-blue-200 text-blue-800"><span>Consultas:</span> <span>R$ {stageSums.consulta.toLocaleString('pt-BR')}</span></Badge>}
-                                   {stageSums.exame > 0 && <Badge variant="outline" className="w-full justify-between font-normal bg-purple-50 border-purple-200 text-purple-800"><span>Exames:</span> <span>R$ {stageSums.exame.toLocaleString('pt-BR')}</span></Badge>}
-                                   {stageSums.cirurgia > 0 && <Badge variant="outline" className="w-full justify-between font-normal bg-green-50 border-green-200 text-green-800"><span>Cirurgias:</span> <span>R$ {stageSums.cirurgia.toLocaleString('pt-BR')}</span></Badge>}
-                                </div>
-                              )}
-                            </div>
-                            <ScrollArea className="h-[calc(100%-4rem)] pr-2"> {/* Adjust height based on header */}
-                              <div className="space-y-3 pt-1 pb-4">
-                                {stagePacientes.map((paciente) => (
-                                  // Render the draggable card component
-                                  <DraggablePacienteCard
-                                    key={paciente.id}
-                                    paciente={paciente}
-                                    apiConfig={apiConfig}
-                                  />
-                                ))}
-                                {stagePacientes.length === 0 && searchTerm && (
-                                    <p className="text-center text-sm text-muted-foreground p-4">Nenhum paciente encontrado nesta etapa com o termo "{searchTerm}".</p>
-                                )}
-                                 {stagePacientes.length === 0 && !searchTerm && (
-                                    <p className="text-center text-sm text-muted-foreground p-4">Nenhum paciente nesta etapa.</p>
-                                )}
-                              </div>
-                            </ScrollArea>
-                          </div>
-                        </SortableContext>
-                      );
-                    })}
-                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" /> Novo Paciente
+                      </Button>
+                    </DialogTrigger>
+                    <NewPacienteModal onSave={handleAddNewPacienteSave} />
+                  </Dialog>
                 </div>
               </div>
-            </DndContext>
-          </AppShell>
-        );
-      };
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">Carregando...</span>
+              </div>
+            ) : pacientes.length === 0 && !searchTerm ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Nenhum paciente.</p>
+              </div>
+            ) : (
+              <div className="kanban-container flex flex-nowrap h-full">
+                {pipelineStages.map((stage) => {
+                  const pacientesNestaColuna = pacientes.filter(p => p.status === stage.label);
+                  const pacientesFiltradosParaRenderizar = filterPacientes(pacientesNestaColuna);
+                  const showTotals = stagesWithTotals.includes(stage.label);
+                  const { totalConsulta, totalExame, totalCirurgia } = showTotals 
+                    ? calculateStageTotals(stage.label) 
+                    : { totalConsulta: 0, totalExame: 0, totalCirurgia: 0 };
+                  
+                  return (
+                    <PipelineColumn
+                      key={stage.id}
+                      id={stage.id}
+                      label={stage.label}
+                      pacientes={pacientesFiltradosParaRenderizar}
+                      apiConfig={apiConfig}
+                      totalConsulta={totalConsulta}
+                      totalExame={totalExame}
+                      totalCirurgia={totalCirurgia}
+                      showTotals={showTotals}
+                      onOpenPacienteModal={handleOpenDetailModal}
+                      searchTerm={searchTerm}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </DndContext>
+      
+      <PacienteDetailModal
+        open={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        paciente={selectedPaciente}
+        onSave={handleSavePaciente}
+        configuredProcedures={configuredProcedures}
+      />
+    </AppShell>
+  );
+};
 
-      export default Pacientes;
+export default Pacientes;

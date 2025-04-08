@@ -110,13 +110,13 @@ const ToastDescription = React.forwardRef<
 ))
 ToastDescription.displayName = ToastPrimitives.Description.displayName
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
+export type ToastProps = React.ComponentPropsWithoutRef<typeof Toast> & {
+  variant?: "default" | "destructive";
+};
 
-type ToastActionElement = React.ReactElement<typeof ToastAction>
+export type ToastActionElement = React.ReactElement<typeof ToastAction>;
 
 export {
-  type ToastProps,
-  type ToastActionElement,
   ToastProvider,
   ToastViewport,
   Toast,
@@ -124,4 +124,9 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
+  useToast,
+  toast,
 }
+
+// Import useToast and toast from the ts file to avoid circular dependencies
+import { useToast, toast } from "@/components/ui/toast.ts";
