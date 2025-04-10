@@ -9,7 +9,7 @@ interface PipelineColumnProps {
   id: string;
   label: string;
   pacientes: PacienteDataExtended[];
-  apiConfig: ApiConfig | null;
+  apiConfig: ApiConfig;
   totalConsulta: number;
   totalExame: number;
   totalCirurgia: number;
@@ -40,11 +40,19 @@ export function PipelineColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "pipeline-column flex-shrink-0 w-[300px] transition-colors duration-200",
-        isOver ? 'bg-primary/10' : 'bg-muted/30'
+        "pipeline-column flex-shrink-0 w-[300px] h-full flex flex-col rounded-md overflow-hidden border-2 border-transparent", // Added border-transparent for ring offset
+        "transition-colors duration-200 ease-in-out", // Added transition
+        isOver
+          ? 'bg-primary/10 border-primary/30 ring-2 ring-primary/50 ring-offset-2 ring-offset-background' // Highlight styles when hovering over
+          : 'bg-muted/30' // Default background
       )}
     >
-      <div className="font-medium text-sm mb-3 px-2 sticky top-0 bg-muted/80 backdrop-blur-sm z-10 pt-2 pb-2 border-b">
+      {/* Header */}
+      <div className={cn(
+          "font-medium text-sm mb-0 px-3 py-3 sticky top-0 z-10 border-b shrink-0",
+          isOver ? "bg-primary/10 backdrop-blur-sm" : "bg-muted/80 backdrop-blur-sm" // Adjust header bg slightly on hover too
+        )}
+      >
         {label}
         <span className="text-xs text-muted-foreground ml-2">
           ({pacientes.length})
@@ -58,8 +66,9 @@ export function PipelineColumn({
         )}
       </div>
 
-      <ScrollArea className="h-[calc(100%-5rem)] px-2">
-        <div className="space-y-3 pt-1 pb-4">
+      {/* Content Area with Vertical Scroll */}
+      <ScrollArea className="flex-1 h-full pb-4 px-2"> {/* Changed to flex-1 */}
+        <div className="space-y-3 pt-3 pb-4"> {/* Adjusted padding */}
           {pacientes.length > 0 ? (
             pacientes.map((paciente) => (
               <PacienteCard

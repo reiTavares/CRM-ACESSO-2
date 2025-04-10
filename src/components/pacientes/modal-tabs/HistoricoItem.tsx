@@ -1,42 +1,53 @@
 import React from 'react';
-import { PhoneCall, FileText, CalendarClock, Plus, Clock, Building } from "lucide-react";
-import { HistoricoData, PacienteDataExtended } from '@/components/pacientes/paciente-card'; // Corrigido caminho da importação
-import { safeFormatDate } from './utils'; // Assuming safeFormatDate is moved to utils
+import { Card, CardContent } from "@/components/ui/card";
+import { PacienteHistorico } from '@/components/pacientes/paciente-card';
+import { formatDistance } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
-type Historico = PacienteDataExtended['historico'][0];
-
-interface HistoricoItemProps {
-  item: Historico;
+export interface HistoricoItemProps {
+  historico: PacienteHistorico;
 }
 
-const renderIcon = (tipo: string) => {
-  switch (tipo) {
-    case "Ligação": return <PhoneCall className="h-4 w-4 text-blue-500" />;
-    case "Status": return <FileText className="h-4 w-4 text-green-500" />;
-    case "Procedimento": return <CalendarClock className="h-4 w-4 text-purple-500" />;
-    case "Criação": return <Plus className="h-4 w-4 text-indigo-500" />;
-    case "Acompanhamento": return <Clock className="h-4 w-4 text-amber-500" />;
-    case "Alteração": return <Building className="h-4 w-4 text-orange-500" />;
-    default: return null;
-  }
-};
-
-export const HistoricoItem: React.FC<HistoricoItemProps> = ({ item }) => {
+export const HistoricoItem: React.FC<HistoricoItemProps> = ({ historico }) => {
+  const formattedDate = formatDistance(
+    new Date(historico.created_at),
+    new Date(),
+    { addSuffix: true, locale: ptBR }
+  );
+  
+  // Get user initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
+  
+  const userInitials = historico.usuario_nome ? getInitials(historico.usuario_nome) : 'U';
+  
   return (
-    <div key={item.id} className="border rounded-lg p-3 shadow-sm">
-      <div className="flex items-start">
-        <div className="mt-0.5 mr-3">
-          {renderIcon(item.tipo)}
-        </div>
-        <div className="flex-1">
-          <div className="flex justify-between items-center">
-            <h4 className="font-medium text-sm">{item.tipo}</h4>
-            <span className="text-xs text-muted-foreground">{safeFormatDate(item.data, "dd/MM/yyyy HH:mm")}</span>
+    <Card className="mb-3 shadow-sm">
+      <CardContent className="p-3">
+        <div className="flex items-start gap-3">
+          <Avatar className="h-8 w-8 mt-0.5">
+            <AvatarFallback className="bg-primary/10 text-primary text-xs">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="space-y-1 flex-1">
+            <div className="flex justify-between items-center">
+              <div className="text-sm font-medium">{historico.usuario_nome || "Usuário"}</div>
+              <time className="text-xs text-muted-foreground">{formattedDate}</time>
+            </div>
+            <div className="text-muted-foreground text-xs">{historico.tipo}</div>
+            <p className="text-sm">{historico.descricao}</p>
           </div>
-          <p className="text-sm mt-1">{item.descricao}</p>
-          <span className="text-xs text-muted-foreground mt-1 block text-right">por: {item.usuario}</span>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };

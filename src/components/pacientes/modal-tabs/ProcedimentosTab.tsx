@@ -6,14 +6,18 @@ import { ProcedimentoItem } from './ProcedimentoItem';
 import { safeFormatDate } from './utils';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProcedimentoConfig } from '@/components/configuracoes/ProcedimentosSettings';
+import { StatusProcedimento } from '@/types/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProcedimentosTabProps {
   paciente: PacienteDataExtended;
   handleProcedureInputChange: (procIndex: number, field: string, value: any) => void;
-  handleStatusChange: (procedimentoId: string, status: "ganho" | "perdido") => void;
+  handleStatusChange: (procedimentoId: string, status: StatusProcedimento) => void;
   handleAgendarReagendar: (procedimentoId: string) => void;
   addProcedimento: () => void;
+  deleteProcedimento?: (index: number) => void;
   configuredProcedures: ProcedimentoConfig[];
+  medicos: { id: string | number, nome: string }[];
 }
 
 export const ProcedimentosTab: React.FC<ProcedimentosTabProps> = ({
@@ -22,9 +26,25 @@ export const ProcedimentosTab: React.FC<ProcedimentosTabProps> = ({
   handleStatusChange,
   handleAgendarReagendar,
   addProcedimento,
+  deleteProcedimento,
   configuredProcedures,
+  medicos,
 }) => {
   const procedimentos = paciente.procedimentos || [];
+  const { toast } = useToast();
+
+  const handleEditProcedimento = (index: number) => {
+    console.log(`Editando procedimento no índice ${index}`);
+  };
+
+  const handleDeleteProcedimento = (index: number) => {
+    if (deleteProcedimento) {
+      deleteProcedimento(index);
+      toast({
+        description: "Procedimento removido"
+      });
+    }
+  };
 
   return (
     <>
@@ -44,11 +64,15 @@ export const ProcedimentosTab: React.FC<ProcedimentosTabProps> = ({
                   key={procedimento.id || `proc-item-${index}`}
                   procedimento={procedimento}
                   index={index}
-                  handleProcedureInputChange={handleProcedureInputChange}
-                  handleStatusChange={handleStatusChange}
-                  handleAgendarReagendar={handleAgendarReagendar}
+                  onProcedureInputChange={handleProcedureInputChange}
+                  onStatusChange={handleStatusChange}
+                  onAgendarReagendar={handleAgendarReagendar}
                   formattedProcDate={formattedProcDate}
                   configuredProcedures={configuredProcedures}
+                  onEdit={() => handleEditProcedimento(index)}
+                  onDelete={handleDeleteProcedimento}
+                  medicos={medicos}
+                  hospital_id={paciente.hospital_id}
                 />
               );
             })}

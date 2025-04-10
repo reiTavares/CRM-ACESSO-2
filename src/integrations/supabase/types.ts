@@ -65,6 +65,30 @@ export type Database = {
         }
         Relationships: []
       }
+      funnels: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: number
+          is_default: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          is_default?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          is_default?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
       historico: {
         Row: {
           created_at: string
@@ -102,30 +126,45 @@ export type Database = {
       }
       hospitais: {
         Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          complemento: string | null
           contato_agendamento: string | null
           contato_scm: string | null
           created_at: string
           endereco: string | null
+          estado: string | null
           id: number
           nome: string
           responsavel: string | null
           telefone: string | null
         }
         Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
           contato_agendamento?: string | null
           contato_scm?: string | null
           created_at?: string
           endereco?: string | null
+          estado?: string | null
           id?: number
           nome: string
           responsavel?: string | null
           telefone?: string | null
         }
         Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
           contato_agendamento?: string | null
           contato_scm?: string | null
           created_at?: string
           endereco?: string | null
+          estado?: string | null
           id?: number
           nome?: string
           responsavel?: string | null
@@ -208,11 +247,13 @@ export type Database = {
           bairro: string | null
           cidade: string | null
           consultor_responsavel_id: string
+          convenio: string | null
           cpf: string | null
           created_at: string
           data_nascimento: string | null
           email: string | null
           foto_perfil_path: string | null
+          funnel_id: number | null
           gestor_responsavel_id: string | null
           hospital_id: number
           id: number
@@ -231,11 +272,13 @@ export type Database = {
           bairro?: string | null
           cidade?: string | null
           consultor_responsavel_id: string
+          convenio?: string | null
           cpf?: string | null
           created_at?: string
           data_nascimento?: string | null
           email?: string | null
           foto_perfil_path?: string | null
+          funnel_id?: number | null
           gestor_responsavel_id?: string | null
           hospital_id: number
           id?: number
@@ -254,11 +297,13 @@ export type Database = {
           bairro?: string | null
           cidade?: string | null
           consultor_responsavel_id?: string
+          convenio?: string | null
           cpf?: string | null
           created_at?: string
           data_nascimento?: string | null
           email?: string | null
           foto_perfil_path?: string | null
+          funnel_id?: number | null
           gestor_responsavel_id?: string | null
           hospital_id?: number
           id?: number
@@ -275,6 +320,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "pacientes_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pacientes_hospital_id_fkey"
             columns: ["hospital_id"]
             isOneToOne: false
@@ -286,6 +338,38 @@ export type Database = {
             columns: ["medico_id"]
             isOneToOne: false
             referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_stages: {
+        Row: {
+          created_at: string
+          funnel_id: number
+          id: number
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          funnel_id: number
+          id?: number
+          name: string
+          position: number
+        }
+        Update: {
+          created_at?: string
+          funnel_id?: number
+          id?: number
+          name?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
             referencedColumns: ["id"]
           },
         ]

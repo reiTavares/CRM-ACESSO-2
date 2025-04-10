@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PacienteDataExtended, NotaData } from '@/components/pacientes/paciente-card'; // Ajuste o caminho
-import { NotaItem } from './NotaItem'; // Importar o item da nota
+import { PacienteDataExtended, PacienteNota } from '@/components/pacientes/paciente-card';
+import { NotaItem } from './NotaItem';
 import { Send } from 'lucide-react';
 
 interface NotasTabProps {
@@ -60,7 +60,9 @@ export const NotasTab: React.FC<NotasTabProps> = ({
         <ScrollArea className="flex-1 pr-4"> {/* flex-1 para ocupar espaço restante */}
           <div className="space-y-3 pb-4">
             {/* Ordenar notas da mais recente para a mais antiga */}
-            {[...notas].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()).map((nota) => (
+            {[...notas].sort((a, b) => 
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            ).map((nota) => (
               <NotaItem key={nota.id} nota={nota} />
             ))}
           </div>

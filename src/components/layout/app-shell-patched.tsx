@@ -21,9 +21,8 @@ import {
   Menu,
   Settings,
   Users,
-  Home,
 } from "lucide-react";
 import { Sidebar } from "../ui/sidebar";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobile } from "@/hooks/use-mobile";
 
 // IMPORTANT: Replace variant="ghost" with variant="outline" in the actual file

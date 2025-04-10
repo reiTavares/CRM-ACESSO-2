@@ -1,27 +1,66 @@
 import React from 'react';
-import { PacienteDataExtended, NotaData } from '@/components/pacientes/paciente-card'; // Ajuste o caminho se necessário
-import { safeFormatDate } from './utils'; // Reutilizar a função de data segura
-import { UserCircle } from 'lucide-react'; // Ícone para usuário
+import { PacienteNota } from '@/components/pacientes/paciente-card';
+import { Card, CardContent } from "@/components/ui/card";
+import { formatDistance } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 interface NotaItemProps {
-  nota: NotaData;
+  nota: PacienteNota;
 }
 
 export const NotaItem: React.FC<NotaItemProps> = ({ nota }) => {
+  // Format the date for display
+  const formattedDate = formatDistance(
+    new Date(nota.created_at),
+    new Date(),
+    { addSuffix: true, locale: ptBR }
+  );
+  
+  // Get user initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
+  
+  const userInitials = nota.usuario_nome ? getInitials(nota.usuario_nome) : 'U';
+  
   return (
-    <div className="border rounded-md p-3 shadow-sm bg-background">
-      <div className="flex justify-between items-center mb-2 pb-1 border-b border-dashed">
-        <div className="flex items-center text-xs text-muted-foreground">
-          <UserCircle className="h-3.5 w-3.5 mr-1" />
-          <span>{nota.usuario || 'Usuário Desconhecido'}</span>
+    <Card className="border rounded-lg overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary/10 text-primary text-xs">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="flex-1">
+            <div className="flex justify-between items-center mb-1">
+              <p className="text-sm font-medium">{nota.usuario_nome || "Usuário"}</p>
+              <time className="text-xs text-muted-foreground">{formattedDate}</time>
+            </div>
+            
+            <p className="text-sm whitespace-pre-line">{nota.texto}</p>
+            
+            {nota.anexo_path && (
+              <a 
+                href={nota.anexo_path} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-xs text-primary hover:underline"
+              >
+                Ver anexo
+              </a>
+            )}
+          </div>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {safeFormatDate(nota.data, "dd/MM/yyyy HH:mm")}
-        </span>
-      </div>
-      <p className="text-sm whitespace-pre-wrap break-words">
-        {nota.texto}
-      </p>
-    </div>
+      </CardContent>
+    </Card>
   );
 };

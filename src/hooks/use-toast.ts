@@ -1,8 +1,7 @@
 import {
-  useToast as useToastOriginal,
   toast,
 } from "@/components/ui/toast";
-import type { ToastActionElement, ToastProps } from "@/components/ui/toast.tsx";
+import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 export type ToasterToast = ToastProps & {
   id: string;
@@ -11,7 +10,10 @@ export type ToasterToast = ToastProps & {
   action?: ToastActionElement;
 };
 
-const useToast = useToastOriginal;
-
-export { useToast, toast };
+// Re-export the toast function
+export { toast };
+// Re-export the types
 export type { ToastProps, ToastActionElement };
+
+// Use the custom useToast hook from the component
+export { useToast } from "@/components/ui/toast";
